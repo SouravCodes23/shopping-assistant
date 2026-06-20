@@ -1,0 +1,31 @@
+# .pre-commit-config.yaml — shopping-assistant project
+# Pre-commit hooks for code quality and security gating.
+# NOTE: Because the git root is one level above this directory (day4-2/),
+# all paths are resolved relative to the git root by pre-commit.
+
+repos:
+  # ── Standard code-quality hooks ────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+        name: Fix end of files (ensure single newline)
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+
+  # ── Local Semgrep security gate ────────────────────────────────────────────
+  # Uses the semgrep binary installed in the project's .venv.
+  # Scans only staged Python files; --error makes any finding a blocking failure.
+  - repo: local
+    hooks:
+      - id: semgrep-security-scan
+        name: "Semgrep: Detect hardcoded secrets & security violations"
+        language: system
+        entry: semgrep
+        args:
+          - --config
+          - shopping-assistant/.semgrep/rules.yaml
+          - --error
+        types: [python]
+        pass_filenames: true
+        verbose: true
