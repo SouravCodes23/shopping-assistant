@@ -6,7 +6,7 @@
 
 ## 🌐 Live Demo
 
-> 🚀 **[COMING SOON — Link will be added after Render deployment]**
+> 🚀 **[Live Demo on Render](https://shopping-assistant-lr3n.onrender.com)**
 
 ---
 
