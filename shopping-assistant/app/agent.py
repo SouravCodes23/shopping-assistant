@@ -13,11 +13,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import math
 import os
 import threading
 import time
 from collections import defaultdict
+
+# ---------------------------------------------------------------------------
+# Structured audit logger — records who did what and when.
+# In production, point this handler at Cloud Logging or a SIEM.
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [AUDIT] %(levelname)s %(message)s",
+)
+_audit = logging.getLogger("shopping_assistant.audit")
+
+
+def _audit_log(action: str, user_id: str, detail: str) -> None:
+    """Write a structured audit entry for every successful tool invocation."""
+    _audit.info("{action=%s, user_id=%s, detail=%s}", action, user_id, detail)
+
 
 from dotenv import load_dotenv
 from google.adk.agents import Agent
@@ -244,6 +261,11 @@ def award_loyalty_points(
         _LOYALTY_ACCOUNTS[validated.user_id] = new_balance
         _AWARDED_ORDERS.add(normalized_order)
 
+    _audit_log(
+        action="award_loyalty_points",
+        user_id=validated.user_id,
+        detail=f"order={normalized_order} points_awarded={actual_awarded} new_balance={new_balance}",
+    )
     return (
         f"🌟 {actual_awarded} loyalty point(s) awarded to '{validated.user_id}' "
         f"for order '{normalized_order}' "
@@ -303,6 +325,11 @@ def redeem_discount_code(user_id: str, code: str) -> str:
         # 4. Mark as redeemed atomically
         entry["redeemed"] = True
 
+    _audit_log(
+        action="redeem_discount_code",
+        user_id=validated.user_id,
+        detail=f"code={normalized} discount='{entry['discount']}'",
+    )
     return (
         f"🎉 Success! Code '{normalized}' has been redeemed for user '{validated.user_id}'. "
         f"Benefit applied: {entry['discount']}. Enjoy your savings!"
@@ -395,14 +422,21 @@ def check_order_status(order_id: str) -> str:
 root_agent = Agent(
     name="shopping_assistant",
     model=Gemini(
-        model="gemini-2.0-flash",
+        model="gemini-flash-latest",
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     instruction=(
-        "You are a friendly and knowledgeable AI shopping assistant for our retail store. "
-        "Help customers browse products, check order status, and redeem discount codes. "
+        "You are a strict AI shopping assistant ONLY for our retail store. "
+        "You MUST ONLY answer questions directly related to: "
+        "(1) browsing our store products, "
+        "(2) checking order status, "
+        "(3) redeeming discount codes, or "
+        "(4) earning loyalty points. "
+        "If a customer asks ANY question outside these topics — including general knowledge, "
+        "coding help, history, math, or any other off-topic subject — you MUST politely "
+        "decline and redirect them back to store operations. "
         "When redeeming a discount code, always ask for the customer's registered user ID first. "
-        "Be warm, helpful, and proactively suggest relevant products or deals."
+        "Be warm and helpful within the scope of store operations only."
     ),
     tools=[
         award_loyalty_points,
